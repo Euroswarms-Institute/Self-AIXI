@@ -31,6 +31,7 @@ fn synthetic_kvs() -> Vec<(String, GgufValue)> {
         ("qwen35.ssm.conv_kernel".into(), GgufValue::U32(4)),
         ("qwen35.ssm.state_size".into(), GgufValue::U32(4)),
         ("qwen35.ssm.group_count".into(), GgufValue::U32(2)),
+        ("qwen35.ssm.time_step_rank".into(), GgufValue::U32(2)),
         ("qwen35.ssm.inner_size".into(), GgufValue::U32(8)),
         (
             "qwen35.rope.dimension_sections".into(),

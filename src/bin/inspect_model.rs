@@ -129,10 +129,20 @@ fn main() {
         .map(|t| t.elems())
         .unwrap_or(0);
     let embd_kept = 3 * cfg.hidden as u64; // rows {bit0, bit1, prime}
+                                           // MTP blocks (blk.N for N >= active layers, including their nextn.*
+                                           // extras) are amputated wholesale.
+    let nextn_layers = gguf.kv_u64("qwen35.nextn_predict_layers").unwrap_or(0) as usize;
+    let active = cfg.n_layers - nextn_layers;
     let nextn: u64 = gguf
         .tensors
         .iter()
-        .filter(|t| t.name.starts_with("nextn."))
+        .filter(|t| {
+            t.name
+                .strip_prefix("blk.")
+                .and_then(|rest| rest.split('.').next())
+                .and_then(|n| n.parse::<usize>().ok())
+                .is_some_and(|n| n >= active)
+        })
         .map(|t| t.elems())
         .sum();
     let discarded = (embd - embd_kept) + nextn;

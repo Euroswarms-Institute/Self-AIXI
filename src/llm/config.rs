@@ -26,9 +26,12 @@ pub struct Qwen35Config {
     pub ssm_conv_kernel: usize,
     /// DeltaNet: per-head key/query width (d_k = 128).
     pub ssm_state_size: usize,
-    /// DeltaNet: number of linear-attention heads (16).
+    /// DeltaNet: number of key/query heads (`group_count`, 16).
     pub ssm_heads: usize,
-    /// DeltaNet: total value width (inner = heads · d_v = 2048).
+    /// DeltaNet: number of value heads (`time_step_rank` in GGUF terms, 16;
+    /// llama.cpp's num_v_heads).
+    pub ssm_v_heads: usize,
+    /// DeltaNet: total value width (inner = v_heads · d_v = 2048).
     pub ssm_inner: usize,
 }
 
@@ -61,13 +64,19 @@ impl Qwen35Config {
             ssm_conv_kernel: p("ssm.conv_kernel")? as usize,
             ssm_state_size: p("ssm.state_size")? as usize,
             ssm_heads: p("ssm.group_count")? as usize,
+            ssm_v_heads: p("ssm.time_step_rank")? as usize,
             ssm_inner: p("ssm.inner_size")? as usize,
         };
         if p("attention.value_length")? as usize != cfg.head_dim {
             return Err("attention value_length != key_length is unsupported".into());
         }
-        if !cfg.ssm_inner.is_multiple_of(cfg.ssm_heads) {
-            return Err("ssm inner size not divisible by head count".into());
+        if !cfg.ssm_inner.is_multiple_of(cfg.ssm_v_heads) {
+            return Err("ssm inner size not divisible by value-head count".into());
+        }
+        if cfg.ssm_heads != cfg.ssm_v_heads {
+            // The general family allows fewer k-heads repeated across
+            // v-heads; qwen3_5 uses symmetric heads, so keep the code honest.
+            return Err("k-head/v-head repeat is not implemented (k != v head count)".into());
         }
         if cfg.rope_dims > cfg.head_dim {
             return Err("rope dims exceed head dim".into());
@@ -77,7 +86,7 @@ impl Qwen35Config {
 
     /// DeltaNet per-head value width d_v (128 here).
     pub fn ssm_head_v(&self) -> usize {
-        self.ssm_inner / self.ssm_heads
+        self.ssm_inner / self.ssm_v_heads
     }
 }
 

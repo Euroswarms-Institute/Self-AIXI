@@ -16,6 +16,10 @@
 //! `tensor` provides the GEMV, and the forward pass lives in `model`.
 
 pub mod config;
+pub mod env_model;
 pub mod gguf;
+pub mod model;
 pub mod quant;
+pub mod rope;
+pub mod state;
 pub mod tensor;
