@@ -13,8 +13,11 @@
 //!   past it, the state is rebuilt by deterministic replay from position 0
 //!   (exact, just slow; counted in `deep_replays` for diagnostics).
 
-/// Positions of retained checkpoints (≈19 MB each on the 2B model).
-pub const CHECKPOINT_CAP: usize = 24;
+/// Positions of retained checkpoints (≈19 MB each on the 2B model, so the
+/// cap bounds checkpoint memory at ~1.2 GB). Must exceed the deepest ρUCT
+/// imagination in tokens — horizon × (action_bits + percept_bits) — or
+/// unwinding falls back to full deterministic replay each simulation.
+pub const CHECKPOINT_CAP: usize = 64;
 
 #[derive(Clone, PartialEq)]
 pub struct DeltaNetState {

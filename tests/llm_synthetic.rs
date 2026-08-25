@@ -368,7 +368,8 @@ fn checkpoint_eviction_falls_back_to_exact_replay() {
     let p_after_one = m.predict_bit_probability(1);
 
     // Push far beyond CHECKPOINT_CAP, then unwind everything.
-    let deep: Vec<u8> = (0..40).map(|i| (i % 2) as u8).collect();
+    let n = mc_aixi::llm::state::CHECKPOINT_CAP + 16;
+    let deep: Vec<u8> = (0..n).map(|i| (i % 2) as u8).collect();
     m.learn_symbols(&deep);
     m.revert_learned_symbols(deep.len());
 

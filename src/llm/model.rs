@@ -532,8 +532,8 @@ impl Qwen35Model {
         for c in 0..channels {
             let w = &l.conv_w[c * (taps + 1)..(c + 1) * (taps + 1)];
             let mut acc = w[taps] * qkv_raw[c];
-            for t in 0..taps {
-                acc += w[t] * dn.conv_tail[t * channels + c];
+            for (t, &wt) in w[..taps].iter().enumerate() {
+                acc += wt * dn.conv_tail[t * channels + c];
             }
             y[c] = acc;
         }

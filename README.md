@@ -17,6 +17,20 @@ The **AIXI policy** is \(\pi_\xi^\ast\) when \(\xi\) is a **universal** semimeas
 
 ---
 
+## Rust implementation of Family A (MC-AIXI)
+
+Family A now has a complete, tested **Rust** implementation at the repository
+root: ρUCT over a Bayesian mixture of FAC-CTW models **and a surgically
+dissected Qwen3.8-2B** (GGUF parsed, quantization kernels, and the hybrid
+Gated-DeltaNet/attention forward pass all hand-rolled; exact-revert contract
+preserved via checkpointed recurrent state; validated against a llama.cpp
+oracle to 9e-4 on an f32 graph). See
+[`RUST_IMPLEMENTATION.md`](RUST_IMPLEMENTATION.md); `cargo test` runs the
+correctness spine, `cargo run --release --bin smoke` the Phase-0-style
+PASS/FAIL suite.
+
+---
+
 ## V0 implementation reality (what exists today)
 
 | Area | Status | Where |

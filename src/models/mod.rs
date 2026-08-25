@@ -48,3 +48,27 @@ pub trait EnvModel {
 
     fn model_id(&self) -> String;
 }
+
+impl EnvModel for Box<dyn EnvModel> {
+    fn root_log_probability(&self) -> f64 {
+        (**self).root_log_probability()
+    }
+    fn predict_bit_probability(&mut self, bit: u8) -> f64 {
+        (**self).predict_bit_probability(bit)
+    }
+    fn learn_symbols(&mut self, bits: &[u8]) {
+        (**self).learn_symbols(bits)
+    }
+    fn append_history_symbols(&mut self, bits: &[u8]) {
+        (**self).append_history_symbols(bits)
+    }
+    fn revert_learned_symbols(&mut self, n: usize) {
+        (**self).revert_learned_symbols(n)
+    }
+    fn revert_history_symbols(&mut self, n: usize) {
+        (**self).revert_history_symbols(n)
+    }
+    fn model_id(&self) -> String {
+        (**self).model_id()
+    }
+}
