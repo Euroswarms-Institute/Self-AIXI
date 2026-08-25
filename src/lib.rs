@@ -21,4 +21,5 @@
 pub mod encoding;
 pub mod env;
 pub mod logspace;
+pub mod models;
 pub mod rng;
