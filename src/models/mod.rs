@@ -17,6 +17,8 @@
 
 pub mod ctw;
 pub mod kt;
+pub mod mixture;
+pub mod uniform;
 
 /// A revertible, budgeted sequential model over bits (§1 naming ledger:
 /// realizes `MixtureEnvModel`; every method terminates in bounded time, §1.1).
