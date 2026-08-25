@@ -160,7 +160,10 @@ Measured on this 4-vCPU AVX-512 container (seed 42):
 | CoinFlip(0.6), ctw-mix, 400 cycles | average reward **+0.605** (optimum 0.6), uniform's posterior → 0, 9 ms/cycle |
 | Biased RPS, ctw-mix, 2 000 cycles | average **+0.196**, late windows ≈ +0.22–0.24 (random = 0); posterior selects depth 8 — the bias spans one full cycle of context, exactly what d4 cannot see |
 | Cheese Maze, ctw-mix, 3 000 cycles, m=4 | window average −1.63 → −1.00 (wall-bumps eliminated), posterior → d16; JAIR-scale budgets (tens of thousands of cycles) apply to this domain |
-| Qwen3.8-2B forward | ~0.4 s/token on 4 CPU cores (quantized-resident, scalar kernels); a full-mix CoinFlip decision at 10 sims × horizon 2 ≈ 25 s |
+| Tiger, ctw-mix(8,16,24), 3 000 cycles, m=3 | window average → −1.000 exactly: the agent learns to *never open on insufficient evidence* (no −100s after the first phase) and parks at the safe listening policy — the classic small-budget plateau; breaking out needs larger m and simulation counts |
+| Kuhn Poker, ctw-mix, 4 000 cycles, m=3 | window average −0.182 → −0.079 and still climbing toward the +0.056 second-player Nash value; posterior selects d16, 31 ms/cycle |
+| Qwen3.8-2B forward | ~0.4 s/token on 4 CPU cores (quantized-resident, scalar kernels; 805 MiB resident after the carve, 0.8 s load) |
+| **CoinFlip, full-mix** (fac-d4 + fac-d8 + uniform + llm), 12 cycles, 10 sims, m=2 | average **+0.667**; ~31 s/cycle. The posterior trajectory is the point: the LLM starts at its ¼ prior, is measured against the bit stream, and is demoted to 0.02 while FAC-CTW rises to 0.78 — Bayes pricing a neural prior against compression priors online, with dominance bounding the cost of having tried it at ln 4 nats |
 
 The per-cycle posterior trajectory (also written by `--csv`) is the point of
 the exercise: **Bayes arbitrates between compression-era and neural priors
