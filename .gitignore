@@ -1,0 +1,11 @@
+# Rust build artifacts
+/target/
+
+# Downloaded model weights (fetch with scripts/fetch_model.sh)
+/models/
+
+# Dev-only llama.cpp oracle checkout/build (scripts/oracle_check.sh)
+/oracle/
+
+# Experiment outputs
+*.csv
