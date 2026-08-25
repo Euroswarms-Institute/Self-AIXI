@@ -21,6 +21,7 @@
 pub mod agent;
 pub mod encoding;
 pub mod env;
+pub mod llm;
 pub mod logspace;
 pub mod models;
 pub mod planning;
