@@ -1,4 +1,8 @@
-//! Action-conditional Context Tree Weighting (FAC-CTW, JAIR §4–§5).
+//! Action-conditional Context Tree Weighting (AC-CTW, JAIR §4–§5.3) — one
+//! shared context tree over the whole interleaved bit stream, the variant
+//! pyaixi implements. The *factored* FAC-CTW the JAIR experiments actually
+//! use (one tree per percept bit position, immune to positional aliasing)
+//! is built on top of this type in `models::fac_ctw`.
 //!
 //! `CtwModel` computes, in O(D) per bit, the Bayesian mixture over **all**
 //! prediction suffix trees of depth ≤ D with the natural prior 2^(−Γ_D(T))

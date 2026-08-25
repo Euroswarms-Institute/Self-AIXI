@@ -18,8 +18,10 @@
 //!   full-attention) reduced to a conditional probability engine over the
 //!   two-token bit alphabet (`src/llm`).
 
+pub mod agent;
 pub mod encoding;
 pub mod env;
 pub mod logspace;
 pub mod models;
+pub mod planning;
 pub mod rng;

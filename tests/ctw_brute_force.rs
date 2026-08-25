@@ -137,6 +137,59 @@ fn matches_brute_force_with_fac_interleaving() {
     }
 }
 
+/// FAC-CTW must equal the *product over percept bit positions* of
+/// brute-force PST mixtures, where position p's factor learns only its own
+/// bits (all other learned bits demoted to context-only appends).
+#[test]
+fn fac_ctw_matches_product_of_brute_force_factors() {
+    use mc_aixi::models::fac_ctw::FacCtwModel;
+    let mut rng = seeded(777);
+    for depth in 0..=3 {
+        for pbits in 1..=3usize {
+            // Interleaved cycles: 1 action bit + `pbits` percept bits.
+            let mut ops: Vec<(bool, u8)> = Vec::new();
+            for _ in 0..4 {
+                ops.push((false, u8::from(rng.random_bool(0.5))));
+                for _ in 0..pbits {
+                    ops.push((true, u8::from(rng.random_bool(0.7))));
+                }
+            }
+
+            let mut fac = FacCtwModel::new(depth, pbits);
+            for &(learned, bit) in &ops {
+                if learned {
+                    fac.learn_symbols(&[bit]);
+                } else {
+                    fac.append_history_symbols(&[bit]);
+                }
+            }
+
+            let mut expected = 0.0;
+            for p in 0..pbits {
+                let mut pos = 0usize;
+                let masked: Vec<(bool, u8)> = ops
+                    .iter()
+                    .map(|&(learned, bit)| {
+                        if learned {
+                            let mine = pos % pbits == p;
+                            pos += 1;
+                            (mine, bit)
+                        } else {
+                            (false, bit)
+                        }
+                    })
+                    .collect();
+                expected += brute_force_log_prob(depth, &masked);
+            }
+            let got = fac.root_log_probability();
+            assert!(
+                (got - expected).abs() < 1e-12,
+                "depth {depth} pbits {pbits}: fac {got} vs brute {expected}"
+            );
+        }
+    }
+}
+
 #[test]
 fn matches_brute_force_on_degenerate_streams() {
     for depth in 0..=4 {

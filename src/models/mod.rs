@@ -16,6 +16,7 @@
 //! **bit-exactly** by recording previous values rather than replaying deltas.
 
 pub mod ctw;
+pub mod fac_ctw;
 pub mod kt;
 pub mod mixture;
 pub mod uniform;

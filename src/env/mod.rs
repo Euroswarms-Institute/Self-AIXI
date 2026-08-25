@@ -76,6 +76,45 @@ pub trait Environment {
     }
 }
 
+/// The static facts a planner needs about a domain, detached from the live
+/// environment (the search must never touch the real environment — it plans
+/// against ξ only, JAIR §3).
+#[derive(Clone, Copy, Debug)]
+pub struct DomainSpec {
+    pub num_actions: u64,
+    pub action_bits: u32,
+    pub observation_bits: u32,
+    pub reward_bits: u32,
+    pub reward_min: f64,
+    pub reward_max: f64,
+}
+
+impl DomainSpec {
+    pub fn from_env(env: &dyn Environment) -> Self {
+        let (reward_min, reward_max) = env.reward_range();
+        DomainSpec {
+            num_actions: env.num_actions(),
+            action_bits: env.action_bits(),
+            observation_bits: env.observation_bits(),
+            reward_bits: env.reward_bits(),
+            reward_min,
+            reward_max,
+        }
+    }
+
+    pub fn percept_bits(&self) -> u32 {
+        self.observation_bits + self.reward_bits
+    }
+
+    /// Decode a (possibly model-imagined) reward code. Imagined codes can
+    /// exceed the environment's true span, so the decoded value is clamped to
+    /// the declared range — both ρUCT and the exact expectimax use this same
+    /// convention.
+    pub fn decode_reward(&self, code: u64) -> f64 {
+        (self.reward_min + code as f64).min(self.reward_max)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
