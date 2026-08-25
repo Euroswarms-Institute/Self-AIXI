@@ -159,7 +159,7 @@ Measured on this 4-vCPU AVX-512 container (seed 42):
 |---|---|
 | CoinFlip(0.6), ctw-mix, 400 cycles | average reward **+0.605** (optimum 0.6), uniform's posterior → 0, 9 ms/cycle |
 | Biased RPS, ctw-mix, 2 000 cycles | average **+0.196**, late windows ≈ +0.22–0.24 (random = 0); posterior selects depth 8 — the bias spans one full cycle of context, exactly what d4 cannot see |
-| Cheese Maze, ctw-mix, 3 000 cycles, m=4 | window average −1.63 → −1.00 (wall-bumps eliminated), posterior → d16; JAIR-scale budgets (tens of thousands of cycles) apply to this domain |
+| Cheese Maze, ctw-mix, 12 000 cycles, m=6, 300 sims | window average −1.63 → **exactly −1.000**: wall-bumps eliminated, then a stable safe-wandering loop that does not seek the cheese. Two honest readings, both documented: this aliased POMDP needs JAIR-scale budgets (tens of thousands of cycles, m ≥ 8, more simulations), and a Bayes-optimal policy under a still-uncertain model is *not* guaranteed to explore — AIXI's known lack of asymptotic-optimality guarantees, visible in 11 cells |
 | Tiger, ctw-mix(8,16,24), 3 000 cycles, m=3 | window average → −1.000 exactly: the agent learns to *never open on insufficient evidence* (no −100s after the first phase) and parks at the safe listening policy — the classic small-budget plateau; breaking out needs larger m and simulation counts |
 | Kuhn Poker, ctw-mix, 4 000 cycles, m=3 | window average −0.182 → −0.079 and still climbing toward the +0.056 second-player Nash value; posterior selects d16, 31 ms/cycle |
 | Qwen3.8-2B forward | ~0.4 s/token on 4 CPU cores (quantized-resident, scalar kernels; 805 MiB resident after the carve, 0.8 s load) |
