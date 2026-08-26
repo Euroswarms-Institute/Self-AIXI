@@ -15,6 +15,7 @@
 //! `quant` implements the block formats and fused dequant·dot kernels,
 //! `tensor` provides the GEMV, and the forward pass lives in `model`.
 
+pub mod byte_model;
 pub mod config;
 pub mod env_model;
 pub mod gguf;

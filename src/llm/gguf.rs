@@ -181,6 +181,12 @@ fn retain_string_array(key: &str) -> bool {
     key == "tokenizer.ggml.tokens"
 }
 const MAX_RETAINED_NUMERIC_ARRAY: u64 = 4096;
+/// Large numeric arrays are skipped except the ones the carves need:
+/// token_type gates which vocabulary entries count as text when the byte
+/// carve marginalizes the full softmax into next-byte buckets.
+fn retain_numeric_array(key: &str, count: u64) -> bool {
+    count <= MAX_RETAINED_NUMERIC_ARRAY || key == "tokenizer.ggml.token_type"
+}
 
 pub struct GgufFile {
     mmap: Mmap,
@@ -243,7 +249,7 @@ impl GgufFile {
                 } else {
                     let w = scalar_width(elem_type)
                         .ok_or_else(|| format!("unknown array elem type {elem_type}"))?;
-                    if count <= MAX_RETAINED_NUMERIC_ARRAY {
+                    if retain_numeric_array(&key, count) {
                         if elem_type == 6 || elem_type == 12 {
                             let mut v = Vec::with_capacity(count as usize);
                             for _ in 0..count {

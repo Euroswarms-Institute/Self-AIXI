@@ -6,6 +6,7 @@
 //! tiny domains, serving as the ground truth ρUCT is tested against.
 
 pub mod expectimax;
+pub mod modal_byte;
 pub mod rho_uct;
 
 /// Discounted horizon mass Σ_{k=0}^{m-1} γᵏ — the value-normalization scale.

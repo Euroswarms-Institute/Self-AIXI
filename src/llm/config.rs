@@ -139,3 +139,127 @@ impl TokenProbe {
         }
     }
 }
+
+/// Is byte `b` one GPT-2's byte-level BPE maps to its own code point?
+/// (printable ASCII and most of Latin-1; everything else gets remapped).
+fn gpt2_direct_byte(b: u8) -> bool {
+    (0x21..=0x7E).contains(&b) || (0xA1..=0xAC).contains(&b) || (0xAE..=0xFF).contains(&b)
+}
+
+/// GPT-2's `bytes_to_unicode`: the printable-substitute character under
+/// which raw byte `b` appears in byte-level BPE vocabulary strings
+/// (space → 'Ġ', newline → 'Ċ', ...). Qwen's tokenizer inherits this map.
+pub fn gpt2_byte_char(b: u8) -> char {
+    if gpt2_direct_byte(b) {
+        return b as char;
+    }
+    let mut n = 0u32;
+    for x in 0..=255u8 {
+        if gpt2_direct_byte(x) {
+            continue;
+        }
+        if x == b {
+            return char::from_u32(256 + n).unwrap();
+        }
+        n += 1;
+    }
+    unreachable!("every byte is direct or remapped")
+}
+
+/// The byte carve's tokenizer reduction: the 256 single-byte token ids (the
+/// base alphabet of the byte-level BPE — always present in the vocabulary),
+/// the stream prime, and the per-token first-byte map the full-vocabulary
+/// marginalization buckets with.
+#[derive(Clone, Debug)]
+pub struct ByteProbe {
+    /// `byte_tokens[b]` = token id whose string is byte b's mapped char.
+    pub byte_tokens: [u32; 256],
+    pub prime: u32,
+    /// For every vocabulary entry: the raw byte its string starts with, or
+    /// None for control/special tokens and non-text entries. P(next byte=b)
+    /// = Σ P(token t) over t with first_byte[t] == Some(b).
+    pub first_byte: Vec<Option<u8>>,
+}
+
+impl ByteProbe {
+    pub fn from_gguf(gguf: &GgufFile) -> Result<Self, String> {
+        let tokens = match gguf.kvs.get("tokenizer.ggml.tokens") {
+            Some(GgufValue::StrArray(v)) => v,
+            _ => return Err("tokenizer.ggml.tokens missing from metadata".into()),
+        };
+        // llama token types: 1 = NORMAL, 6 = BYTE are text; CONTROL and
+        // USER_DEFINED specials ("<|endoftext|>", ...) must not be bucketed
+        // by their literal first char. Absent array ⇒ treat all as text.
+        let token_types = match gguf.kvs.get("tokenizer.ggml.token_type") {
+            Some(GgufValue::IntArray(v)) => Some(v),
+            _ => None,
+        };
+        let is_text = |i: usize| -> bool {
+            token_types.is_none_or(|tt| matches!(tt.get(i), Some(1) | Some(6) | None))
+        };
+        let mut char_to_byte = std::collections::HashMap::new();
+        for b in 0..=255u8 {
+            char_to_byte.insert(gpt2_byte_char(b), b);
+        }
+        // One pass over the vocabulary: the single-char byte tokens (input
+        // side) and every token's first byte (output-side bucketing).
+        let mut byte_tokens = [u32::MAX; 256];
+        let mut first_byte = vec![None; tokens.len()];
+        for (i, t) in tokens.iter().enumerate() {
+            if !is_text(i) {
+                continue;
+            }
+            let mut chars = t.chars();
+            let Some(c0) = chars.next() else { continue };
+            let Some(&b0) = char_to_byte.get(&c0) else {
+                continue;
+            };
+            first_byte[i] = Some(b0);
+            if chars.next().is_none() && byte_tokens[b0 as usize] == u32::MAX {
+                byte_tokens[b0 as usize] = i as u32;
+            }
+        }
+        if let Some(missing) = byte_tokens.iter().position(|&t| t == u32::MAX) {
+            return Err(format!(
+                "vocabulary has no single-byte token for byte {missing:#04x} — \
+                 not a byte-level BPE vocab?"
+            ));
+        }
+        let prime = gguf
+            .kv_u64("tokenizer.ggml.padding_token_id")
+            .ok()
+            .or_else(|| gguf.kv_u64("tokenizer.ggml.eos_token_id").ok())
+            .map(|v| v as u32)
+            .ok_or("no padding/eos token to prime the stream with")?;
+        Ok(ByteProbe {
+            byte_tokens,
+            prime,
+            first_byte,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gpt2_byte_char;
+
+    #[test]
+    fn gpt2_byte_map_known_vectors() {
+        // Identity range.
+        assert_eq!(gpt2_byte_char(b'0'), '0');
+        assert_eq!(gpt2_byte_char(b'1'), '1');
+        assert_eq!(gpt2_byte_char(b'!'), '!');
+        assert_eq!(gpt2_byte_char(b'~'), '~');
+        assert_eq!(gpt2_byte_char(0xFF), '\u{FF}');
+        // Remapped controls: the classic constants.
+        assert_eq!(gpt2_byte_char(b' '), '\u{120}'); // Ġ
+        assert_eq!(gpt2_byte_char(b'\n'), '\u{10A}'); // Ċ
+        assert_eq!(gpt2_byte_char(b'\t'), '\u{109}'); // ĉ
+        assert_eq!(gpt2_byte_char(0x00), '\u{100}'); // Ā
+                                                     // The map is injective over all 256 bytes.
+        let mut seen = std::collections::HashSet::new();
+        for b in 0..=255u8 {
+            assert!(seen.insert(gpt2_byte_char(b)));
+        }
+    }
+}

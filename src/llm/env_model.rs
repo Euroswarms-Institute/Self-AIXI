@@ -76,7 +76,7 @@ impl LlmModel {
         while self.state.pos < self.tokens.len() {
             let t = self.tokens[self.state.pos];
             let logits = self.model.advance(&mut self.state, t);
-            self.logits2.push(logits);
+            self.logits2.push([logits[0], logits[1]]);
         }
     }
 
@@ -102,7 +102,7 @@ impl LlmModel {
             let tokens = std::mem::take(&mut self.tokens);
             for &t in &tokens {
                 let logits = self.model.advance(&mut self.state, t);
-                self.logits2.push(logits);
+                self.logits2.push([logits[0], logits[1]]);
             }
             self.tokens = tokens;
         }

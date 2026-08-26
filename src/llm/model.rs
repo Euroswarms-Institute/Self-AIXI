@@ -5,9 +5,10 @@
 //!
 //! - vision tower: absent from the GGUF already; multimodal machinery ignored;
 //! - MTP block(s): the last `nextn_predict_layers` blocks are never loaded;
-//! - vocabulary: only the bit-token and stream-prime rows of `token_embd`
-//!   are dequantized (input side), and the tied unembedding is carved to the
-//!   two bit rows — the model's output IS a 2-logit distribution.
+//! - vocabulary: only the carved token rows of `token_embd` are dequantized
+//!   (input side), and the tied unembedding is carved to the chosen rows —
+//!   two for the bit carve (the output IS a 2-logit distribution), 256 for
+//!   the byte carve.
 //!
 //! Per block (pre-norm residual): x += mixer(rmsnorm(x)); x += ffn(rmsnorm(x)).
 //! Mixer is either gated GQA attention (QK-norm → partial RoPE → causal
@@ -83,7 +84,10 @@ pub struct Qwen35Model {
     pub n_active_layers: usize,
     rope: Rope,
     embed_rows: HashMap<u32, Vec<f32>>,
-    unembed: [Vec<f32>; 2],
+    /// Carved tied-unembedding rows, in caller-chosen order; `advance`
+    /// returns one logit per row. The bit carve has two ("0", "1"), the
+    /// byte carve 256 (row i = byte i's token).
+    unembed: Vec<Vec<f32>>,
     layers: Vec<Layer>,
     output_norm: Vec<f32>,
 }
@@ -157,11 +161,27 @@ impl Qwen35Model {
         Self::from_gguf(&gguf, cfg, probe, q_gate_layout)
     }
 
+    /// The classic bit carve: unembedding reduced to the "0"/"1" rows.
     pub fn from_gguf(
         gguf: &GgufFile,
         cfg: Qwen35Config,
         probe: TokenProbe,
         q_gate_layout: QGateLayout,
+    ) -> Result<Self, String> {
+        let ids = [probe.bit0, probe.bit1];
+        Self::from_gguf_carved(gguf, cfg, probe, q_gate_layout, &ids)
+    }
+
+    /// General carve: the tied unembedding is reduced to `unembed_ids` (in
+    /// that order — `advance` logit i belongs to `unembed_ids[i]`), and the
+    /// input embedding to those rows plus the stream prime. Everything else
+    /// in the vocabulary stays on disk.
+    pub fn from_gguf_carved(
+        gguf: &GgufFile,
+        cfg: Qwen35Config,
+        probe: TokenProbe,
+        q_gate_layout: QGateLayout,
+        unembed_ids: &[u32],
     ) -> Result<Self, String> {
         let nextn = gguf.kv_u64("qwen35.nextn_predict_layers").unwrap_or(0) as usize;
         let n_active = cfg
@@ -194,11 +214,16 @@ impl Qwen35Model {
             Ok(out)
         };
         let mut embed_rows = HashMap::new();
-        for id in [probe.bit0, probe.bit1, probe.prime] {
-            embed_rows.insert(id, carve_row(id)?);
+        for &id in unembed_ids.iter().chain(std::iter::once(&probe.prime)) {
+            if let std::collections::hash_map::Entry::Vacant(e) = embed_rows.entry(id) {
+                e.insert(carve_row(id)?);
+            }
         }
-        // Tied unembedding: logits are dots with the same two bit rows.
-        let unembed = [carve_row(probe.bit0)?, carve_row(probe.bit1)?];
+        // Tied unembedding: logits are dots with the same carved rows.
+        let unembed = unembed_ids
+            .iter()
+            .map(|&id| carve_row(id))
+            .collect::<Result<Vec<_>, _>>()?;
 
         let vec1 = |name: &str| -> Result<Vec<f32>, String> {
             Ok(QTensor::from_gguf(gguf, name)?.dequant_row_f32(0))
@@ -338,10 +363,30 @@ impl Qwen35Model {
             .sum()
     }
 
+    /// Number of carved unembedding rows (= length of `advance`'s output).
+    pub fn unembed_len(&self) -> usize {
+        self.unembed.len()
+    }
+
     /// Advance one token through the network, mutating `state` (checkpoint
-    /// pushed first, so the step is exactly revertible), and return the
-    /// carved 2-logit output [logit("0"), logit("1")].
-    pub fn advance(&self, state: &mut LlmState, token: u32) -> [f32; 2] {
+    /// pushed first, so the step is exactly revertible), and return one
+    /// logit per carved unembedding row (bit carve: [logit("0"), logit("1")]).
+    pub fn advance(&self, state: &mut LlmState, token: u32) -> Vec<f32> {
+        let xn = self.advance_hidden(state, token);
+        let dot = |w: &[f32]| -> f32 {
+            let mut acc = 0f64;
+            for (a, b) in w.iter().zip(&xn) {
+                acc += (a * b) as f64;
+            }
+            acc as f32
+        };
+        self.unembed.iter().map(|w| dot(w)).collect()
+    }
+
+    /// Advance one token and return the final normed hidden state instead of
+    /// carved logits — the byte carve applies its own full-vocabulary head
+    /// on top of this (revert semantics identical to `advance`).
+    pub fn advance_hidden(&self, state: &mut LlmState, token: u32) -> Vec<f32> {
         let eps = self.cfg.rms_eps;
         state.push_checkpoint();
         let pos = state.pos;
@@ -389,14 +434,7 @@ impl Qwen35Model {
         let xn = rmsnorm(&x, &self.output_norm, eps);
         trace("result_norm", -1, &xn);
         state.pos += 1;
-        let dot = |w: &[f32]| -> f32 {
-            let mut acc = 0f64;
-            for (a, b) in w.iter().zip(&xn) {
-                acc += (a * b) as f64;
-            }
-            acc as f32
-        };
-        [dot(&self.unembed[0]), dot(&self.unembed[1])]
+        xn
     }
 
     fn ffn(&self, f: &Ffn, xn: &[f32]) -> Vec<f32> {

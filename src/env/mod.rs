@@ -13,6 +13,7 @@ pub mod biased_rps;
 pub mod cheese_maze;
 pub mod coin_flip;
 pub mod kuhn_poker;
+pub mod text_bytes;
 pub mod tiger;
 
 /// A percept: observation symbol plus offset-encoded reward code
