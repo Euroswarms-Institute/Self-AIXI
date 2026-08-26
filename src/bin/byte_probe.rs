@@ -24,7 +24,10 @@ fn main() {
     let (model, probe, head) = load_byte_carved(&gguf, QGateLayout::PerHeadInterleaved).unwrap();
     // Report a few byte-token ids for sanity.
     for c in [b'0', b'1', b'T', b'h', b'e', b' '] {
-        eprintln!("byte {:?} -> token {}", c as char, probe.byte_tokens[c as usize]);
+        eprintln!(
+            "byte {:?} -> token {}",
+            c as char, probe.byte_tokens[c as usize]
+        );
     }
     eprintln!(
         "head: {}x{} {} ({:.1} MiB), text tokens {}",
