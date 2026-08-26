@@ -1,7 +1,7 @@
 //! Seeded randomness. Every stochastic component (environments, percept
 //! sampling in ρUCT, rollout policies) draws from an explicitly seeded
 //! generator so whole experiments replay deterministically
-//! (IMPLEMENTATION_PLAN.md §7 requires reproducible evaluation runs).
+//! (reproducible evaluation runs are a baseline requirement).
 
 use rand_chacha::rand_core::SeedableRng;
 

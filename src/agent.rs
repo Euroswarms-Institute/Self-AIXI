@@ -1,4 +1,4 @@
-//! The MC-AIXI agent loop (JAIR Alg. 5; IMPLEMENTATION_PLAN.md §4.1):
+//! The MC-AIXI agent loop (JAIR Alg. 5):
 //! plan with ρUCT over ξ, act, then commit the real experience — action bits
 //! appended, percept bits learned *permanently* (no revert for reality).
 

@@ -1,4 +1,4 @@
-//! Environment interface (IMPLEMENTATION_PLAN.md §2; JAIR §2).
+//! Environment interface (JAIR §2).
 //!
 //! One interaction cycle: the agent emits an action `a_t`, the environment
 //! replies with a percept `e_t = (o_t, r_t)`. All spaces are finite (§1.1) and
@@ -40,7 +40,7 @@ impl Percept {
     }
 }
 
-/// A finite, resettable, stochastic environment (IMPLEMENTATION_PLAN.md §2).
+/// A finite, resettable, stochastic environment.
 ///
 /// Contract: `step` must only be called with `action < num_actions()`, and
 /// every returned percept must satisfy the declared bit widths.

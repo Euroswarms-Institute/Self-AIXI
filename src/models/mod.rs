@@ -1,7 +1,7 @@
 //! Environment models — the ξ side of MC-AIXI.
 //!
 //! `EnvModel` is the Rust rendering of the repo's `MixtureEnvModel` Protocol
-//! (the retired Python prototype's `mixture.py`; IMPLEMENTATION_PLAN.md §3): a sequential
+//! (the retired Python prototype's `mixture.py`): a sequential
 //! probability model over the interleaved action/percept **bit** stream with
 //! the FAC action-conditional split — percept bits are *learned* (they update
 //! the model and carry probability), action bits are only *appended* (they

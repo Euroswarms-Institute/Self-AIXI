@@ -1,5 +1,5 @@
 //! `LlmModel` — the dissected base model as an MC-AIXI environment-model
-//! component (IMPLEMENTATION_PLAN.md §3 contract, same as CTW).
+//! component (same six-method `EnvModel` contract as CTW).
 //!
 //! The interleaved action/percept bit stream maps to a token stream: one
 //! stream-prime token at position 0 (this family has no BOS), then one bit

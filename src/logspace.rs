@@ -1,5 +1,5 @@
-//! Log-domain arithmetic helpers (IMPLEMENTATION_PLAN.md §3: all model
-//! probabilities live in log space; JAIR §5 computes CTW weights the same way).
+//! Log-domain arithmetic helpers (all model probabilities live in log
+//! space; JAIR §5 computes CTW weights the same way).
 
 /// ln(1/2), the branching prior weight of the CTW recursion (JAIR eq. 33).
 pub const LOG_HALF: f64 = -core::f64::consts::LN_2;

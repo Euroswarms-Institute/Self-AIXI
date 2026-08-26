@@ -1,5 +1,5 @@
 //! Bit codecs between finite symbol spaces and the binary agent alphabet
-//! (IMPLEMENTATION_PLAN.md §5 `encoding/`; JAIR §2: actions and percepts are
+//! (JAIR §2: actions and percepts are
 //! binary strings of fixed per-environment widths).
 //!
 //! Convention: values are encoded MSB-first, so the codec is the big-endian

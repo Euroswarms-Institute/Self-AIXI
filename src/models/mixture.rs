@@ -1,5 +1,5 @@
 //! The Bayesian mixture ξ over a finite model catalog
-//! (IMPLEMENTATION_PLAN.md §3; JAIR §2, eq. 5; §1 ledger: `log_weights`).
+//! (JAIR §2, eq. 5; weights kept in log space as `log_weights`).
 //!
 //! ```text
 //! ξ(e₁:ₜ ‖ a₁:ₜ) = Σ_ν w⁰_ν · ν(e₁:ₜ ‖ a₁:ₜ)

@@ -13,7 +13,7 @@ V_\xi^\pi(h_{<t}) = \mathbb{E}_{\xi,\pi}\Big[\sum_{k=t}^{\infty} \gamma^{k-t} r_
 \pi_\xi^\ast \in \arg\max_\pi V_\xi^\pi(h_{<t}).
 $$
 
-The AIXI policy is \(\pi_\xi^\ast\) when \(\xi\) is a universal semimeasure over computable environments. That construction does not terminate, so this codebase implements finite \(\mathcal{M}\), budgeted planning, and explicit revert/replay contracts, keeping every \(\xi\) update an ordinary Turing-bounded operation. See [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) and [`SUPERTASK_BOUNDARY.md`](SUPERTASK_BOUNDARY.md).
+The AIXI policy is \(\pi_\xi^\ast\) when \(\xi\) is a universal semimeasure over computable environments. That construction does not terminate, so this codebase implements finite \(\mathcal{M}\), budgeted planning, and explicit revert/replay contracts, keeping every \(\xi\) update an ordinary Turing-bounded operation. The line between what is computed and what is idealized is drawn in [`SUPERTASK_BOUNDARY.md`](SUPERTASK_BOUNDARY.md).
 
 ---
 
@@ -21,7 +21,7 @@ The AIXI policy is \(\pi_\xi^\ast\) when \(\xi\) is a universal semimeasure over
 
 The implementation is the Rust crate at the repository root. The Python prototype has been deleted; git history has it if you ever feel nostalgic. Its load-bearing contracts survived the port: the six-method `MixtureEnvModel` interface, the FAC learn/append split, and the revert invariant, which the Rust version tightens from a 1e-8 drift tolerance to bit-exact restoration, because chasing float drift through an MCTS at 2am stops being fun quickly.
 
-Contents: ρUCT expectimax search over a Bayes mixture \(\xi\) of FAC-CTW models plus a Qwen3.8-2B that was taken apart down to raw GGUF tensors. Own container parser, own GGML quantization kernels, own hybrid Gated-DeltaNet/attention forward pass. Zero inference frameworks in the dependency tree. The recurrent state is exactly revertible through a checkpoint stack, and the forward pass agrees with a llama.cpp oracle to 9e-4 on an f32 graph, which is about as much external validation as one can extract from this universe. Also five JAIR domains and an exact enumerated expectimax as ground truth. Details, measured numbers, and the list of things that don't work yet: [`RUST_IMPLEMENTATION.md`](RUST_IMPLEMENTATION.md).
+Contents: ρUCT expectimax search over a Bayes mixture \(\xi\) of FAC-CTW models plus a Qwen3.8-2B that was taken apart down to raw GGUF tensors. Own container parser, own GGML quantization kernels (scalar reference plus runtime-dispatched AVX2+FMA, pinned together by tests at 1e-5), own hybrid Gated-DeltaNet/attention forward pass. Zero inference frameworks in the dependency tree. The recurrent state is exactly revertible through a checkpoint stack, and the forward pass agrees with a llama.cpp oracle to 9e-4 on an f32 graph, which is about as much external validation as one can extract from this universe. Also five JAIR domains and an exact enumerated expectimax as ground truth. The deep-dive doc got deleted in a repo cleanup; what remains authoritative is the table below, the module docs, and the tests.
 
 ---
 
@@ -41,11 +41,11 @@ Contents: ρUCT expectimax search over a Bayes mixture \(\xi\) of FAC-CTW models
 Smoke entrypoint:
 
 ```bash
-cargo test                          # 62 tests. They pass.
+cargo test                          # 63 tests. They pass.
 cargo run --release --bin smoke     # PASS/FAIL lines, exit 0 when green
 ```
 
-Source analyses and paper-to-module mapping live under [`analyses/`](analyses/) and [`modules/`](modules/). The consolidated design doc is [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
+Source analyses and paper-to-module mapping live under [`analyses/`](analyses/) and [`modules/`](modules/).
 
 ---
 
@@ -136,4 +136,3 @@ Pull requests should keep finite-model and budget assumptions explicit in new co
 ## Deliverables & repo context
 
 - Per paper: structured notes in `analyses/` (problem, definitions, main theorems/algorithms, notation, what is implementable and what stays idealized).
-- Synthesis: `IMPLEMENTATION_PLAN.md` is updated after analyses and supplementary modules land.

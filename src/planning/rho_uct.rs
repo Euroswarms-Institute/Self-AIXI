@@ -1,5 +1,5 @@
 //! ρUCT — Monte-Carlo expectimax approximation over ξ
-//! (JAIR §3, Algorithms 1–3; IMPLEMENTATION_PLAN.md §4.1).
+//! (JAIR §3, Algorithms 1–3).
 //!
 //! The search tree alternates decision nodes (agent chooses, UCB1 with
 //! horizon-normalized values, JAIR eq. 14) and chance nodes (percepts sampled

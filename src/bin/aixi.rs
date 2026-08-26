@@ -1,4 +1,4 @@
-//! The MC-AIXI agent CLI (IMPLEMENTATION_PLAN.md §4.1/§7): run ρUCT over a
+//! The MC-AIXI agent CLI: run ρUCT over a
 //! Bayesian mixture environment model on one of the JAIR §7 domains, and
 //! stream per-cycle metrics — reward, running average, ξ root log-probability
 //! and, the headline, the mixture posterior trajectory over the model

@@ -1,5 +1,5 @@
 //! Planning — the expectimax side of MC-AIXI
-//! (IMPLEMENTATION_PLAN.md §4.1, Family A).
+//! (Family A of the research roadmap).
 //!
 //! `rho_uct` approximates the finite-horizon expectimax over ξ by Monte-Carlo
 //! tree search (JAIR §3); `expectimax` computes it exactly by enumeration on
