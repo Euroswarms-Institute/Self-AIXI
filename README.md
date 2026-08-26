@@ -54,6 +54,30 @@ Source analyses and paper-to-module mapping live under [`analyses/`](analyses/) 
 
 ---
 
+## Measured results
+
+All on this 4-vCPU container, seed 42, reproducible from the workflow
+commands below. Optimal or reference values in parentheses.
+
+| Run | Result |
+|-----|--------|
+| CoinFlip(0.6), ctw-mix, 400 cycles | average reward **+0.605** (optimum 0.6), 9 ms/cycle |
+| Biased RPS, ctw-mix, 2000 cycles | **+0.196**, late windows +0.22 to +0.24 (random play 0); the posterior selects depth 8, the shallowest tree that spans one full cycle of context |
+| Cheese Maze, ctw-mix, 12000 cycles, m=6 | window average −1.63 → exactly **−1.000**: wall bumps eliminated, then a stable safe-wandering loop that does not seek the cheese. Documented honestly as both a budget question and AIXI's known lack of exploration guarantees |
+| Tiger, ctw-mix(8,16,24), 3000 cycles | window → **−1.000** exactly: the agent learns never to open on insufficient evidence and parks at the safe listening policy, the classic small-budget plateau |
+| Kuhn Poker, ctw-mix, 4000 cycles | window −0.182 → **−0.079**, still climbing toward the +0.056 second-player Nash value |
+| Qwen3.8-2B forward pass | **~0.25 s/token** with the AVX2 kernels, ~0.6 scalar (3.6× in CPU time); 805 MiB resident for the bit carve, 1.2 GiB with the byte-carve head |
+| CoinFlip, full-mix (bit carve), 12 cycles | **+0.667**; the LLM starts at its ¼ prior and is priced to 0.02 while FAC-CTW rises to 0.78. 9.5 s/cycle (was 31 before the AVX2 kernels) |
+| text_bytes, ctw-mix(8,16,24), 1200 cycles | prediction accuracy **0.179**; posterior settles on depth 24 |
+| text_bytes, byte-mix (same trees + byte-llm), 1200 cycles | prediction accuracy **0.300**, a 67% lift from adding the carved LLM to the same catalog. The posterior is the story: the trees lead through the repetitive opening paragraph, then byte-llm takes the *entire* posterior (1.000) through the novel middle prose with window accuracy peaking at 0.49 against the trees' 0.17 at the same cycles, and deep CTW wins the weight back late once its statistics mature. About 1 s/cycle, one LLM forward per cycle |
+
+The per-cycle posterior trajectory (also written by `--csv`) is the point of
+the exercise: Bayes arbitrates between compression learned online and
+knowledge distilled offline, cycle by cycle, with dominance bounding the
+cost of carrying the losing component at ln K nats.
+
+---
+
 ## Findings the build surfaced
 
 Three things measured here that the papers leave between the lines:
