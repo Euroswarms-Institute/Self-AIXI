@@ -196,8 +196,36 @@ pub fn dequant_row(ty: GgmlType, row: &[u8], out: &mut [f32]) {
 }
 
 /// Fused dequant·dot of one quantized row against `x` (len = element count).
-/// Per-block partial sums in f32, accumulated in f64.
+/// Dispatches to the AVX2 kernels when the CPU has them (disable with
+/// MC_AIXI_NO_SIMD=1); the scalar path is the reference the SIMD path is
+/// tested against. Per-block partial sums in f32, accumulated in f64.
 pub fn dot_row(ty: GgmlType, row: &[u8], x: &[f32]) -> f32 {
+    #[cfg(target_arch = "x86_64")]
+    if avx2_enabled()
+        && matches!(
+            ty,
+            GgmlType::Q8_0 | GgmlType::Q4K | GgmlType::Q5K | GgmlType::Q6K
+        )
+    {
+        // Safety: gated on runtime AVX2+FMA detection.
+        return unsafe { avx2::dot_row(ty, row, x) };
+    }
+    dot_row_scalar(ty, row, x)
+}
+
+#[cfg(target_arch = "x86_64")]
+fn avx2_enabled() -> bool {
+    use std::sync::OnceLock;
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| {
+        std::env::var_os("MC_AIXI_NO_SIMD").is_none()
+            && is_x86_feature_detected!("avx2")
+            && is_x86_feature_detected!("fma")
+    })
+}
+
+/// Scalar reference implementation of the fused dequant·dot.
+pub fn dot_row_scalar(ty: GgmlType, row: &[u8], x: &[f32]) -> f32 {
     let bb = ty.block_bytes();
     let mut total = 0f64;
     match ty {
@@ -316,6 +344,233 @@ pub fn dot_row(ty: GgmlType, row: &[u8], x: &[f32]) -> f32 {
     total as f32
 }
 
+/// AVX2 + FMA kernels for the four quantized block formats. Same block
+/// structure as the scalar path (per-block f32 partial sums folded into an
+/// f64 running total), so the numerical contract the tests check is shared;
+/// only the intra-block summation order differs (8 SIMD lanes reduced at the
+/// end of each sub-block instead of a sequential left fold).
+///
+/// Unpacking strategy: quant bytes are widened 8 at a time to 32-bit lanes
+/// (`_mm256_cvtepu8_epi32`), so every shift/mask below operates on a whole
+/// byte value per lane and cross-byte contamination is structurally
+/// impossible; nibbles and 2-bit fields are then plain `and`/`srli` on the
+/// lane. Converted to f32, multiply-accumulated against `x` with FMA.
+#[cfg(target_arch = "x86_64")]
+mod avx2 {
+    use super::{f16_at, scale_min_k4, GgmlType};
+    use std::arch::x86_64::*;
+
+    /// Horizontal sum of 8 f32 lanes.
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn hsum(v: __m256) -> f32 {
+        let s = _mm_add_ps(_mm256_castps256_ps128(v), _mm256_extractf128_ps::<1>(v));
+        let s = _mm_add_ps(s, _mm_movehl_ps(s, s));
+        let s = _mm_add_ss(s, _mm_shuffle_ps::<1>(s, s));
+        _mm_cvtss_f32(s)
+    }
+
+    /// Zero-extend 8 quant bytes at `p` into 8×u32 lanes.
+    ///
+    /// # Safety
+    /// `p..p+8` must be in bounds (callers derive `p` from `chunks_exact`
+    /// blocks and per-block `x` slices whose lengths are checked).
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn load8_u32(p: *const u8) -> __m256i {
+        _mm256_cvtepu8_epi32(_mm_loadl_epi64(p.cast()))
+    }
+
+    /// # Safety
+    /// Requires AVX2 + FMA (the dispatcher checks at runtime); `row` must be
+    /// whole blocks of `ty` and `x` at least as long as the element count.
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub unsafe fn dot_row(ty: GgmlType, row: &[u8], x: &[f32]) -> f32 {
+        match ty {
+            GgmlType::Q8_0 => dot_q8_0(row, x),
+            GgmlType::Q4K => dot_q4_k(row, x),
+            GgmlType::Q5K => dot_q5_k(row, x),
+            GgmlType::Q6K => dot_q6_k(row, x),
+            _ => unreachable!("AVX2 dispatch covers only quantized block types"),
+        }
+    }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn dot_q8_0(row: &[u8], x: &[f32]) -> f32 {
+        let mut total = 0f64;
+        for (bi, block) in row.chunks_exact(34).enumerate() {
+            let d = f16_at(block, 0);
+            let xs = x[32 * bi..32 * (bi + 1)].as_ptr();
+            let mut acc = _mm256_setzero_ps();
+            for g in 0..4 {
+                let q = _mm256_cvtepi8_epi32(_mm_loadl_epi64(block.as_ptr().add(2 + 8 * g).cast()));
+                acc = _mm256_fmadd_ps(_mm256_cvtepi32_ps(q), _mm256_loadu_ps(xs.add(8 * g)), acc);
+            }
+            total += (d * hsum(acc)) as f64;
+        }
+        total as f32
+    }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn dot_q4_k(row: &[u8], x: &[f32]) -> f32 {
+        let mask4 = _mm256_set1_epi32(0x0F);
+        let mut total = 0f64;
+        for (bi, block) in row.chunks_exact(144).enumerate() {
+            let d = f16_at(block, 0);
+            let dmin = f16_at(block, 2);
+            let scales = &block[4..16];
+            let qs = block.as_ptr().add(16);
+            let xs = x[256 * bi..256 * (bi + 1)].as_ptr();
+            let mut acc = 0f32;
+            for j in 0..4 {
+                let (sc_lo, m_lo) = scale_min_k4(2 * j, scales);
+                let (sc_hi, m_hi) = scale_min_k4(2 * j + 1, scales);
+                let mut s_lo = _mm256_setzero_ps();
+                let mut s_hi = _mm256_setzero_ps();
+                let mut sx_lo = _mm256_setzero_ps();
+                let mut sx_hi = _mm256_setzero_ps();
+                for g in 0..4 {
+                    let q = load8_u32(qs.add(32 * j + 8 * g));
+                    let lo = _mm256_cvtepi32_ps(_mm256_and_si256(q, mask4));
+                    let hi = _mm256_cvtepi32_ps(_mm256_srli_epi32::<4>(q));
+                    let xl = _mm256_loadu_ps(xs.add(64 * j + 8 * g));
+                    let xh = _mm256_loadu_ps(xs.add(64 * j + 32 + 8 * g));
+                    s_lo = _mm256_fmadd_ps(lo, xl, s_lo);
+                    s_hi = _mm256_fmadd_ps(hi, xh, s_hi);
+                    sx_lo = _mm256_add_ps(sx_lo, xl);
+                    sx_hi = _mm256_add_ps(sx_hi, xh);
+                }
+                acc += d * (sc_lo * hsum(s_lo) + sc_hi * hsum(s_hi))
+                    - dmin * (m_lo * hsum(sx_lo) + m_hi * hsum(sx_hi));
+            }
+            total += acc as f64;
+        }
+        total as f32
+    }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn dot_q5_k(row: &[u8], x: &[f32]) -> f32 {
+        let mask4 = _mm256_set1_epi32(0x0F);
+        let one = _mm256_set1_epi32(1);
+        let mut total = 0f64;
+        for (bi, block) in row.chunks_exact(176).enumerate() {
+            let d = f16_at(block, 0);
+            let dmin = f16_at(block, 2);
+            let scales = &block[4..16];
+            let qh = block.as_ptr().add(16);
+            let qs = block.as_ptr().add(48);
+            let xs = x[256 * bi..256 * (bi + 1)].as_ptr();
+            let mut acc = 0f32;
+            for j in 0..4 {
+                let (sc_lo, m_lo) = scale_min_k4(2 * j, scales);
+                let (sc_hi, m_hi) = scale_min_k4(2 * j + 1, scales);
+                // Bit (2j) of qh[l] is the fifth bit of the lo nibble,
+                // bit (2j+1) of the hi nibble; runtime shift counts go via
+                // the xmm-count form of vpsrld.
+                let cnt_lo = _mm_cvtsi32_si128((2 * j) as i32);
+                let cnt_hi = _mm_cvtsi32_si128((2 * j + 1) as i32);
+                let mut s_lo = _mm256_setzero_ps();
+                let mut s_hi = _mm256_setzero_ps();
+                let mut sx_lo = _mm256_setzero_ps();
+                let mut sx_hi = _mm256_setzero_ps();
+                for g in 0..4 {
+                    let q = load8_u32(qs.add(32 * j + 8 * g));
+                    let h = load8_u32(qh.add(8 * g));
+                    let b_lo = _mm256_and_si256(_mm256_srl_epi32(h, cnt_lo), one);
+                    let b_hi = _mm256_and_si256(_mm256_srl_epi32(h, cnt_hi), one);
+                    let lo = _mm256_cvtepi32_ps(_mm256_add_epi32(
+                        _mm256_and_si256(q, mask4),
+                        _mm256_slli_epi32::<4>(b_lo),
+                    ));
+                    let hi = _mm256_cvtepi32_ps(_mm256_add_epi32(
+                        _mm256_srli_epi32::<4>(q),
+                        _mm256_slli_epi32::<4>(b_hi),
+                    ));
+                    let xl = _mm256_loadu_ps(xs.add(64 * j + 8 * g));
+                    let xh = _mm256_loadu_ps(xs.add(64 * j + 32 + 8 * g));
+                    s_lo = _mm256_fmadd_ps(lo, xl, s_lo);
+                    s_hi = _mm256_fmadd_ps(hi, xh, s_hi);
+                    sx_lo = _mm256_add_ps(sx_lo, xl);
+                    sx_hi = _mm256_add_ps(sx_hi, xh);
+                }
+                acc += d * (sc_lo * hsum(s_lo) + sc_hi * hsum(s_hi))
+                    - dmin * (m_lo * hsum(sx_lo) + m_hi * hsum(sx_hi));
+            }
+            total += acc as f64;
+        }
+        total as f32
+    }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn dot_q6_k(row: &[u8], x: &[f32]) -> f32 {
+        let mask4 = _mm256_set1_epi32(0x0F);
+        let mask2 = _mm256_set1_epi32(3);
+        let bias = _mm256_set1_epi32(32);
+        let mut total = 0f64;
+        for (bi, block) in row.chunks_exact(210).enumerate() {
+            let ql = block.as_ptr();
+            let qh = block.as_ptr().add(128);
+            let scales = &block[192..208];
+            let d = f16_at(block, 208);
+            let xs = x[256 * bi..256 * (bi + 1)].as_ptr();
+            let mut acc = 0f32;
+            for half in 0..2 {
+                let (qlo, qho, sco, xo) = (64 * half, 32 * half, 8 * half, 128 * half);
+                let mut s = [_mm256_setzero_ps(); 4];
+                for g in 0..4 {
+                    let is = g / 2; // 16-lane scale groups = 2 SIMD groups each
+                    let l_lo = load8_u32(ql.add(qlo + 8 * g));
+                    let l_hi = load8_u32(ql.add(qlo + 32 + 8 * g));
+                    let h = load8_u32(qh.add(qho + 8 * g));
+                    let q1 = _mm256_sub_epi32(
+                        _mm256_or_si256(
+                            _mm256_and_si256(l_lo, mask4),
+                            _mm256_slli_epi32::<4>(_mm256_and_si256(h, mask2)),
+                        ),
+                        bias,
+                    );
+                    let q2 = _mm256_sub_epi32(
+                        _mm256_or_si256(
+                            _mm256_and_si256(l_hi, mask4),
+                            _mm256_slli_epi32::<4>(_mm256_and_si256(
+                                _mm256_srli_epi32::<2>(h),
+                                mask2,
+                            )),
+                        ),
+                        bias,
+                    );
+                    let q3 = _mm256_sub_epi32(
+                        _mm256_or_si256(
+                            _mm256_srli_epi32::<4>(l_lo),
+                            _mm256_slli_epi32::<4>(_mm256_and_si256(
+                                _mm256_srli_epi32::<4>(h),
+                                mask2,
+                            )),
+                        ),
+                        bias,
+                    );
+                    // h is a zero-extended byte per lane, so h >> 6 needs no mask.
+                    let q4 = _mm256_sub_epi32(
+                        _mm256_or_si256(
+                            _mm256_srli_epi32::<4>(l_hi),
+                            _mm256_slli_epi32::<4>(_mm256_srli_epi32::<6>(h)),
+                        ),
+                        bias,
+                    );
+                    for (k, q) in [q1, q2, q3, q4].into_iter().enumerate() {
+                        let sc = _mm256_set1_ps(scales[sco + is + 2 * k] as i8 as f32);
+                        let xv = _mm256_loadu_ps(xs.add(xo + 32 * k + 8 * g));
+                        s[k] = _mm256_fmadd_ps(_mm256_mul_ps(_mm256_cvtepi32_ps(q), sc), xv, s[k]);
+                    }
+                }
+                acc += d * (hsum(s[0]) + hsum(s[1]) + hsum(s[2]) + hsum(s[3]));
+            }
+            total += acc as f64;
+        }
+        total as f32
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,6 +687,53 @@ mod tests {
                 assert!(
                     (fused - naive).abs() / scale < 1e-4,
                     "{}: fused {fused} vs naive {naive}",
+                    ty.name()
+                );
+            }
+        }
+    }
+
+    /// The dispatched kernel (AVX2 where the CPU has it) against the scalar
+    /// reference, on many multi-block rows. Tighter than the dequant
+    /// reference test since both sides share the per-block f32 / total f64
+    /// accumulation structure; only intra-block summation order differs.
+    #[test]
+    fn simd_matches_scalar() {
+        let mut rng = seeded(31415);
+        for ty in [GgmlType::Q8_0, GgmlType::Q4K, GgmlType::Q5K, GgmlType::Q6K] {
+            let elems = ty.block_elems() * 8;
+            let row_len = ty.row_bytes(elems).unwrap();
+            for _ in 0..32 {
+                let mut row = vec![0u8; row_len];
+                rng.fill(&mut row[..]);
+                // Rewrite raw f16 scale fields with finite values (random bit
+                // patterns can be NaN/Inf, which no real checkpoint contains).
+                for b in row.chunks_exact_mut(ty.block_bytes()) {
+                    let (d_off, dmin) = match ty {
+                        GgmlType::Q6K => (208, false),
+                        GgmlType::Q8_0 => (0, false),
+                        _ => (0, true),
+                    };
+                    b[d_off..d_off + 2].copy_from_slice(
+                        &f16::from_f32(rng.random_range(-0.1..0.1))
+                            .to_bits()
+                            .to_le_bytes(),
+                    );
+                    if dmin {
+                        b[2..4].copy_from_slice(
+                            &f16::from_f32(rng.random_range(-0.1..0.1))
+                                .to_bits()
+                                .to_le_bytes(),
+                        );
+                    }
+                }
+                let x: Vec<f32> = (0..elems).map(|_| rng.random_range(-1.0f32..1.0)).collect();
+                let dispatched = dot_row(ty, &row, &x);
+                let scalar = dot_row_scalar(ty, &row, &x);
+                let scale = scalar.abs().max(1.0);
+                assert!(
+                    (dispatched - scalar).abs() / scale < 1e-5,
+                    "{}: dispatched {dispatched} vs scalar {scalar}",
                     ty.name()
                 );
             }

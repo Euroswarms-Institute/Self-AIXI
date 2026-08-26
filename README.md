@@ -88,7 +88,7 @@ cargo run --release --bin inspect_model -- --gguf models/Qwen3.8-2B-Q4_K_M.gguf
 | Correctness spine | `cargo test` |
 | Smoke invariants | `cargo run --release --bin smoke` |
 | Run the agent | `cargo run --release --bin aixi -- --env coin_flip --cycles 400` |
-| LLM demo | `cargo run --release --bin aixi -- --env coin_flip --model full-mix --ct-depths 4,8 --cycles 12 --mc-simulations 10 --horizon 2` (about 30 s per cycle on 4 CPU cores; budget accordingly) |
+| LLM demo | `cargo run --release --bin aixi -- --env coin_flip --model full-mix --ct-depths 4,8 --cycles 12 --mc-simulations 10 --horizon 2` (about 10 s per cycle on 4 CPU cores with the AVX2 kernels; `MC_AIXI_NO_SIMD=1` falls back to the scalar reference at roughly 3x the cost) |
 | Forward-pass ground truth | `bash scripts/oracle_check.sh` (dev-only, wants a llama.cpp build, see the script header) |
 | Format / lint | `cargo fmt` / `cargo clippy --all-targets -- -D warnings` |
 
