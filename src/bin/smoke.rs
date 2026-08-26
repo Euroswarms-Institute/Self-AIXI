@@ -1,4 +1,4 @@
-//! Offline smoke suite — the Rust analog of `experiments/run_smoke.py`:
+//! Offline smoke suite — the Rust successor of the retired Python prototype's `run_smoke.py`:
 //! fast PASS/FAIL invariant checks over the Family-A stack, no model files
 //! or network required. Exit code 0 iff everything passes.
 

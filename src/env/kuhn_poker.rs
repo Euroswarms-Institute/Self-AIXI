@@ -10,7 +10,7 @@
 //! Cycle protocol (the MC-AIXI cycle is action-then-percept, so hand t is
 //! resolved by the action of cycle t, and the percept reveals hand t+1's
 //! deal): percept observation = (agent card << 1) | opponent-opening-bet
-//! (3 bits, per the repo's orphaned `kuhn_poker.pyc` 6-percept-bit layout),
+//! (3 bits, per the retired Python line's `kuhn_poker` 6-percept-bit parity layout),
 //! reward code = hand-t reward + 2 ∈ {0,1,3,4} (3 bits).
 //!
 //! Agent actions: facing a bet — 1 = call, 0 = fold; after a check —

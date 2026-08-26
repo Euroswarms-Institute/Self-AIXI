@@ -19,7 +19,7 @@
 //!   path; appended (action) bits enter the history/context only (JAIR §5.3).
 //! - Revert is *bit-exact*: undo frames record previous node values, and node
 //!   creation is undone by truncating the arena — the design flaw pyaixi's
-//!   adapter had to work around (`aixi/models/ctw_pyaixi.py` docstring)
+//!   adapter had to work around (the retired Python prototype's `ctw_pyaixi.py` docstring)
 //!   cannot occur because `predict` never touches the tree.
 
 use super::kt::kt_log_increment;

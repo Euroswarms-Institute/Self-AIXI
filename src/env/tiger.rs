@@ -4,8 +4,8 @@
 //! (−1) reveals the tiger's side with accuracy 0.85; opening a door yields
 //! −100 (tiger) or +10 (gold) and re-randomizes the tiger. The reward span
 //! −100..+10 makes the offset code 0..110 (7 bits) — with the 2 observation
-//! bits this is the 9-percept-bit layout of the repo's orphaned
-//! `tiger.cpython-314.pyc` parity module.
+//! bits this is the 9-percept-bit layout of the retired Python line's
+//! `tiger` parity module.
 //!
 //! Actions: 0 = listen, 1 = open left, 2 = open right.
 //! Observations: 0 = nothing, 1 = heard tiger left, 2 = heard tiger right.

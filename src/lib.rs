@@ -8,7 +8,7 @@
 //! `IMPLEMENTATION_PLAN.md` §0/§4.1, honoring the §1 notation ledger, the
 //! §1.1 runtime-computability discipline (every budget finite, every
 //! `predict`/`learn`/`revert` terminating), and the revert-exactness contract
-//! of `aixi/planning/xi_rollouts.py` (root log-probability must be restored
+//! of the retired Python prototype's `xi_rollouts.py` (root log-probability must be restored
 //! after every imagined rollout — here restored *bit-exactly*).
 //!
 //! Mixture components:

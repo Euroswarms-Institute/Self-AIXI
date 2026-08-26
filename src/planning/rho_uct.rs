@@ -96,7 +96,7 @@ impl RhoUct {
 
     /// Run `mc_simulations` simulations from the current root and return the
     /// action with the most visits (ties: higher mean, then lower action id —
-    /// the `aixi/planning/mcts.py` convention).
+    /// the retired Python prototype's `mcts.py` convention).
     pub fn plan(&mut self, model: &mut dyn EnvModel, rng: &mut AgentRng) -> u64 {
         for _ in 0..self.budget.mc_simulations {
             let root_log_p = model.root_log_probability();

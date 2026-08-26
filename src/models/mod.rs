@@ -1,14 +1,14 @@
 //! Environment models — the ξ side of MC-AIXI.
 //!
 //! `EnvModel` is the Rust rendering of the repo's `MixtureEnvModel` Protocol
-//! (`aixi/models/mixture.py`, IMPLEMENTATION_PLAN.md §3): a sequential
+//! (the retired Python prototype's `mixture.py`; IMPLEMENTATION_PLAN.md §3): a sequential
 //! probability model over the interleaved action/percept **bit** stream with
 //! the FAC action-conditional split — percept bits are *learned* (they update
 //! the model and carry probability), action bits are only *appended* (they
 //! condition all later predictions but are never predicted themselves,
 //! JAIR §5.3).
 //!
-//! Contract (the load-bearing part, from `aixi/planning/xi_rollouts.py`):
+//! Contract (the load-bearing part, from the prototype's `xi_rollouts.py`):
 //! `learn`/`append` during imagined rollouts must be undone by
 //! `revert_learned_symbols`/`revert_history_symbols` in strict LIFO order,
 //! after which `root_log_probability()` must be restored — the Python

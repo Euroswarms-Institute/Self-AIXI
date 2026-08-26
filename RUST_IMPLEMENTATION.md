@@ -24,12 +24,12 @@ oracle**, never as a dependency).
 | — ground truth — | exact enumeration of the expectimax on tiny domains | `planning::expectimax` |
 | online learning | real percepts learned permanently; imagined ones learned-then-reverted **bit-exactly** | the `EnvModel` contract (`models`) |
 
-The `EnvModel` trait mirrors the repo's Python `MixtureEnvModel` Protocol
-(`aixi/models/mixture.py`): `root_log_probability`, `predict_bit_probability`,
+The `EnvModel` trait mirrors the retired Python prototype's `MixtureEnvModel` Protocol
+(`mixture.py`, preserved in git history): `root_log_probability`, `predict_bit_probability`,
 `learn_symbols` (percept path), `append_history_symbols` (action path — the
 FAC split: conditioned on, never predicted), and LIFO
 `revert_learned/history_symbols`. The revert-exactness contract of
-`aixi/planning/xi_rollouts.py` (≤ 1e-8 drift) is strengthened to **bit-exact**
+the prototype's `xi_rollouts.py` (≤ 1e-8 drift) is strengthened to **bit-exact**
 throughout: undo frames record previous values rather than replaying deltas.
 
 ## The surgery
@@ -108,7 +108,7 @@ stages:
   component runs.
 - **End-to-end learning**: CoinFlip(0.6) agent regression
   (`tests/agent_coin_flip.rs`); five PASS/FAIL invariants in
-  `cargo run --release --bin smoke` (the `experiments/run_smoke.py` analog).
+  `cargo run --release --bin smoke` (successor of the prototype's `run_smoke.py`).
 
 ## Two findings the implementation surfaced
 
@@ -187,7 +187,7 @@ nats against the best component in hindsight.
   weights, which is the theoretically honest place for it.
 - `SearchBudget` validates every knob; forbidden API names
   (`run_unbounded`, `hypercompute`, …) do not exist in this crate
-  (`supertask_surrogate.py` discipline).
+  (the retired prototype's `supertask_surrogate.py` discipline).
 
 ## Layout
 

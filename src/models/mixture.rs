@@ -16,7 +16,7 @@
 //!
 //! Reverts restore the exact previous `log_w` vectors (recorded values, not
 //! replayed deltas) and forward the undo to every component, preserving the
-//! bit-exact revert contract of `aixi/planning/xi_rollouts.py`.
+//! bit-exact revert contract of the retired Python prototype's `xi_rollouts.py`.
 
 use super::EnvModel;
 use crate::logspace::{log_sum_exp_slice, softmax};
