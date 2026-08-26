@@ -25,6 +25,7 @@
 use super::ctw::CtwModel;
 use super::EnvModel;
 
+#[derive(Clone)]
 pub struct FacCtwModel {
     percept_bits: usize,
     trees: Vec<CtwModel>,
@@ -114,6 +115,10 @@ impl EnvModel for FacCtwModel {
 
     fn model_id(&self) -> String {
         format!("fac-ctw-d{}", self.depth())
+    }
+
+    fn try_clone_box(&self) -> Option<Box<dyn EnvModel>> {
+        Some(Box::new(self.clone()))
     }
 }
 

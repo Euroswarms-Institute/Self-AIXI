@@ -22,8 +22,11 @@ pub mod mixture;
 pub mod uniform;
 
 /// A revertible, budgeted sequential model over bits (§1 naming ledger:
-/// realizes `MixtureEnvModel`; every method terminates in bounded time, §1.1).
-pub trait EnvModel {
+/// realizes `MixtureEnvModel`; every method terminates in bounded time —
+/// see `SUPERTASK_BOUNDARY.md`). `Send` so root-parallel search can move
+/// per-thread clones onto worker threads; every implementation owns plain
+/// data, so this costs nothing.
+pub trait EnvModel: Send {
     /// ln ρ(learned bits so far ‖ appended context) — the model's running
     /// log-marginal of everything it was asked to learn.
     fn root_log_probability(&self) -> f64;
@@ -47,6 +50,15 @@ pub trait EnvModel {
     fn revert_history_symbols(&mut self, n: usize);
 
     fn model_id(&self) -> String;
+
+    /// Deep-copy the model (state included) as an independent instance —
+    /// what root-parallel search runs its per-thread simulations against.
+    /// Default None: models whose state is too large to copy per decision
+    /// (the dissected LLM's checkpoint stack) simply decline, and callers
+    /// requiring clones fail loudly instead of silently sharing state.
+    fn try_clone_box(&self) -> Option<Box<dyn EnvModel>> {
+        None
+    }
 }
 
 impl EnvModel for Box<dyn EnvModel> {
@@ -70,5 +82,8 @@ impl EnvModel for Box<dyn EnvModel> {
     }
     fn model_id(&self) -> String {
         (**self).model_id()
+    }
+    fn try_clone_box(&self) -> Option<Box<dyn EnvModel>> {
+        (**self).try_clone_box()
     }
 }

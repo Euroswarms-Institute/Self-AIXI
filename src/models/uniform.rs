@@ -7,7 +7,7 @@
 use super::EnvModel;
 use crate::logspace::LOG_HALF;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct UniformModel {
     /// LIFO record of operations: true = learned bit, false = appended bit.
     kinds: Vec<bool>,
@@ -55,5 +55,9 @@ impl EnvModel for UniformModel {
 
     fn model_id(&self) -> String {
         "uniform".to_string()
+    }
+
+    fn try_clone_box(&self) -> Option<Box<dyn EnvModel>> {
+        Some(Box::new(self.clone()))
     }
 }

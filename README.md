@@ -37,8 +37,9 @@ The model is carved two ways. The bit carve reduces the vocabulary to two tokens
 | The dissected base model | Qwen3.8-2B (qwen35 hybrid) reduced to a 2-logit conditional probability engine. 508.6M vocabulary params never leave the file, MTP block amputated, recurrent state checkpointed for exact revert | [`src/llm/`](src/llm/) |
 | The byte carve | Same network, full tied unembedding restored as a token-healing marginal head: a next-byte engine over raw text under the same bit-level `EnvModel` contract (first-byte-bucketed full softmax; contiguous-range bit marginals; order-0 KT for the reward bit; lazy token advance so imagined bytes cost nothing) | [`src/llm/byte_model.rs`](src/llm/byte_model.rs) |
 | Exact byte planning | Horizon-1 expectimax by full enumeration: 256 actions × the 8-bit observation tree with learn/revert conditioning, \(\xi\) restored bit-exactly. At m = 1 this IS the search | [`src/planning/modal_byte.rs`](src/planning/modal_byte.rs) |
+| Root-parallel ρUCT | K independent searches per decision over deep clones of \(\xi\) (`EnvModel::try_clone_box`), root statistics merged by visits; deterministic in (state, budget, seed, K) regardless of thread scheduling | [`src/planning/root_parallel.rs`](src/planning/root_parallel.rs) |
 | Oracle validation | Exact-graph parity with llama.cpp (9e-4, synthetic f32 hybrid) plus bounded evaluator noise on the real Q4_K_M | [`scripts/oracle_check.sh`](scripts/oracle_check.sh) |
-| Environments | CoinFlip, Biased RPS, Cheese Maze, Tiger, Kuhn Poker with the JAIR §7 bit layouts, plus next-byte text prediction (embedded corpus or `--text-file`) | [`src/env/`](src/env/) |
+| Environments | CoinFlip, Biased RPS, Cheese Maze, Tiger, Kuhn Poker and PocMan (17×19 maze, 4 ghosts, the 16-bit sensory observation) with the JAIR §7 bit layouts, plus next-byte text prediction (embedded corpus or `--text-file`) | [`src/env/`](src/env/) |
 | Agent + CLI | act/perceive loop, per-cycle metrics including the mixture posterior trajectory, CSV output | [`src/agent.rs`](src/agent.rs), [`src/bin/aixi.rs`](src/bin/aixi.rs) |
 | Smoke suite | Five offline PASS/FAIL invariants behind an exit code | [`src/bin/smoke.rs`](src/bin/smoke.rs) |
 
@@ -104,7 +105,8 @@ cargo run --release --bin inspect_model -- --gguf models/Qwen3.8-2B-Q4_K_M.gguf
 | Run the agent | `cargo run --release --bin aixi -- --env coin_flip --cycles 400` |
 | LLM demo (bit carve) | `cargo run --release --bin aixi -- --env coin_flip --model full-mix --ct-depths 4,8 --cycles 12 --mc-simulations 10 --horizon 2` (about 10 s per cycle on 4 CPU cores with the AVX2 kernels; `MC_AIXI_NO_SIMD=1` falls back to the scalar reference at roughly 3x the cost) |
 | Text baseline (CTW alone) | `cargo run --release --bin aixi -- --env text_bytes --ct-depths 8,16,24 --cycles 300` |
-| Text demo (byte carve) | `cargo run --release --bin aixi -- --env text_bytes --model byte-mix --ct-depths 8,16,24 --cycles 300` (about 1 s per cycle; add `--text-file PATH` for your own corpus) |
+| Text demo (byte carve) | `cargo run --release --bin aixi -- --env text_bytes --model byte-mix --ct-depths 8,16,24 --cycles 1200` (about 1 s per cycle; add `--text-file PATH` for your own corpus) |
+| PocMan | `cargo run --release --bin aixi -- --env pocman --ct-depths 16,24 --cycles 10000 --mc-simulations 400 --horizon 4 --root-parallel 4 --csv pocman.csv` |
 | Forward-pass ground truth | `bash scripts/oracle_check.sh` (dev-only, wants a llama.cpp build, see the script header) |
 | Format / lint | `cargo fmt` / `cargo clippy --all-targets -- -D warnings` |
 

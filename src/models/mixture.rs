@@ -152,6 +152,22 @@ impl EnvModel for BayesMixture {
                 .join("+")
         )
     }
+
+    /// Clones iff every component clones (all-or-nothing: a mixture with an
+    /// LLM component declines, and root-parallel search reports why).
+    fn try_clone_box(&self) -> Option<Box<dyn EnvModel>> {
+        let components = self
+            .components
+            .iter()
+            .map(|c| c.try_clone_box())
+            .collect::<Option<Vec<_>>>()?;
+        Some(Box::new(BayesMixture {
+            components,
+            log_w: self.log_w.clone(),
+            weight_records: self.weight_records.clone(),
+            kinds: self.kinds.clone(),
+        }))
+    }
 }
 
 #[cfg(test)]

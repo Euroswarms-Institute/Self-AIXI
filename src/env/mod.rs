@@ -13,6 +13,7 @@ pub mod biased_rps;
 pub mod cheese_maze;
 pub mod coin_flip;
 pub mod kuhn_poker;
+pub mod pocman;
 pub mod text_bytes;
 pub mod tiger;
 

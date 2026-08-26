@@ -56,6 +56,7 @@ enum SymbolKind {
 /// One learned bit's undo frame; the flat record vectors are shared across
 /// frames (ranges start at `path_start`/`created_start`) to avoid per-bit
 /// allocation.
+#[derive(Clone)]
 struct Frame {
     bit: u8,
     arena_len_before: u32,
@@ -63,6 +64,7 @@ struct Frame {
     created_start: u32,
 }
 
+#[derive(Clone)]
 pub struct CtwModel {
     depth: usize,
     nodes: Vec<Node>,
@@ -303,6 +305,10 @@ impl EnvModel for CtwModel {
 
     fn model_id(&self) -> String {
         format!("ctw-d{}", self.depth)
+    }
+
+    fn try_clone_box(&self) -> Option<Box<dyn EnvModel>> {
+        Some(Box::new(self.clone()))
     }
 }
 

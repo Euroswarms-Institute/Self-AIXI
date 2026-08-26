@@ -8,6 +8,7 @@
 pub mod expectimax;
 pub mod modal_byte;
 pub mod rho_uct;
+pub mod root_parallel;
 
 /// Discounted horizon mass Σ_{k=0}^{m-1} γᵏ — the value-normalization scale.
 pub(crate) fn discounted_span(gamma: f64, m: u32) -> f64 {

@@ -6,6 +6,7 @@ use crate::encoding::encode_bits_msb;
 use crate::env::{DomainSpec, Environment, Percept};
 use crate::models::EnvModel;
 use crate::planning::rho_uct::{RhoUct, SearchBudget};
+use crate::planning::root_parallel::plan_root_parallel;
 use crate::rng::AgentRng;
 
 pub struct AixiAgent<M: EnvModel> {
@@ -16,6 +17,12 @@ pub struct AixiAgent<M: EnvModel> {
     /// rebuilding. Off by default: under a receding horizon, carried value
     /// means are biased low (see `RhoUct::advance_root`).
     pub reuse_tree: bool,
+    /// Some((workers, base_seed)): each decision runs `workers` independent
+    /// root-parallel searches over clones of ξ (total simulations =
+    /// budget.mc_simulations, split across workers). The model must support
+    /// `try_clone_box`; incompatible with `reuse_tree`.
+    pub root_parallel: Option<(usize, u64)>,
+    decisions: u64,
 }
 
 impl<M: EnvModel> AixiAgent<M> {
@@ -25,11 +32,21 @@ impl<M: EnvModel> AixiAgent<M> {
             search: RhoUct::new(spec, budget),
             spec,
             reuse_tree: false,
+            root_parallel: None,
+            decisions: 0,
         }
     }
 
     /// Choose the next action by ρUCT search over the current ξ state.
     pub fn act(&mut self, rng: &mut AgentRng) -> u64 {
+        if let Some((workers, base_seed)) = self.root_parallel {
+            let seed = base_seed.wrapping_add(self.decisions);
+            self.decisions += 1;
+            let (action, _) =
+                plan_root_parallel(&self.model, &self.spec, self.search.budget(), workers, seed)
+                    .expect("root-parallel planning needs a clonable model catalog");
+            return action;
+        }
         self.search.plan(&mut self.model, rng)
     }
 

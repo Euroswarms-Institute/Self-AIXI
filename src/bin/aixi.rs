@@ -13,6 +13,7 @@ use mc_aixi::env::biased_rps::BiasedRockPaperScissors;
 use mc_aixi::env::cheese_maze::CheeseMaze;
 use mc_aixi::env::coin_flip::CoinFlip;
 use mc_aixi::env::kuhn_poker::KuhnPoker;
+use mc_aixi::env::pocman::PocMan;
 use mc_aixi::env::text_bytes::TextBytes;
 use mc_aixi::env::tiger::Tiger;
 use mc_aixi::env::{DomainSpec, Environment};
@@ -31,7 +32,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 const USAGE: &str = "\
-usage: aixi --env <coin_flip|biased_rps|cheese_maze|tiger|kuhn_poker|text_bytes> [options]
+usage: aixi --env <coin_flip|biased_rps|cheese_maze|tiger|kuhn_poker|pocman|text_bytes> [options]
 
 model options:
   --model <ctw-mix|fac-ctw|llm|full-mix|byte-llm|byte-mix>
@@ -48,6 +49,9 @@ expectimax instead, so only --cycles applies there):
   --horizon N           planning horizon m (default 3)
   --gamma F             discount (default 0.99)
   --uct-c F             UCB exploration constant (default 0.35)
+  --root-parallel N     N independent rhoUCT searches per decision over
+                        clones of xi, root statistics merged (CTW catalogs
+                        only; total simulations stay --mc-simulations)
 
 run options:
   --text-file PATH      corpus for text_bytes (default: embedded English text)
@@ -67,6 +71,7 @@ struct Args {
     horizon: u32,
     gamma: f64,
     uct_c: f64,
+    root_parallel: Option<usize>,
     seed: u64,
     report_every: usize,
     csv: Option<PathBuf>,
@@ -84,6 +89,7 @@ fn parse_args() -> Result<Args, String> {
         horizon: 3,
         gamma: 0.99,
         uct_c: 0.35,
+        root_parallel: None,
         seed: 42,
         report_every: 25,
         csv: None,
@@ -109,6 +115,13 @@ fn parse_args() -> Result<Args, String> {
             "--horizon" => a.horizon = val()?.parse().map_err(|e| format!("horizon: {e}"))?,
             "--gamma" => a.gamma = val()?.parse().map_err(|e| format!("gamma: {e}"))?,
             "--uct-c" => a.uct_c = val()?.parse().map_err(|e| format!("uct-c: {e}"))?,
+            "--root-parallel" => {
+                let n: usize = val()?.parse().map_err(|e| format!("root-parallel: {e}"))?;
+                if n == 0 {
+                    return Err("--root-parallel needs at least 1 worker".into());
+                }
+                a.root_parallel = Some(n);
+            }
             "--seed" => a.seed = val()?.parse().map_err(|e| format!("seed: {e}"))?,
             "--report-every" => {
                 a.report_every = val()?.parse().map_err(|e| format!("report: {e}"))?
@@ -134,6 +147,7 @@ fn build_env(args: &Args) -> Result<Box<dyn Environment>, String> {
         "cheese_maze" => Box::new(CheeseMaze::default()),
         "tiger" => Box::new(Tiger::default()),
         "kuhn_poker" => Box::new(KuhnPoker::default()),
+        "pocman" => Box::new(PocMan::default()),
         "text_bytes" => match &args.text_file {
             Some(p) => {
                 let corpus = std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()))?;
@@ -347,6 +361,16 @@ fn run(args: &Args) -> Result<(), String> {
     let model = BayesMixture::uniform(build_catalog(args, &spec)?);
     let ids = model.component_ids();
     let mut agent = AixiAgent::new(model, spec, budget);
+    if let Some(workers) = args.root_parallel {
+        if agent.model.try_clone_box().is_none() {
+            return Err(format!(
+                "--root-parallel needs a clonable model catalog; {} declines \
+                 (the LLM carves keep too much state to copy per decision)",
+                agent.model.model_id()
+            ));
+        }
+        agent.root_parallel = Some((workers, args.seed ^ 0x726F_6F74));
+    }
     let mut rng = seeded(args.seed);
     env.reset(&mut rng);
 
