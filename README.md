@@ -70,6 +70,7 @@ commands below. Optimal or reference values in parentheses.
 | CoinFlip, full-mix (bit carve), 12 cycles | **+0.667**; the LLM starts at its ¼ prior and is priced to 0.02 while FAC-CTW rises to 0.78. 9.5 s/cycle (was 31 before the AVX2 kernels) |
 | text_bytes, ctw-mix(8,16,24), 1200 cycles | prediction accuracy **0.179**; posterior settles on depth 24 |
 | text_bytes, byte-mix (same trees + byte-llm), 1200 cycles | prediction accuracy **0.300**, a 67% lift from adding the carved LLM to the same catalog. The posterior is the story: the trees lead through the repetitive opening paragraph, then byte-llm takes the *entire* posterior (1.000) through the novel middle prose with window accuracy peaking at 0.49 against the trees' 0.17 at the same cycles, and deep CTW wins the weight back late once its statistics mature. About 1 s/cycle, one LLM forward per cycle |
+| PocMan, ctw-mix(16,24), 10000 cycles, 400 sims, m=4, root-parallel 4 | window average reward **−8.25 → −3.52** (cumulative −5.45 and still falling), the JAIR §7 learning-curve shape at a laptop-scale budget: wall bumps eliminated, ghost captures dropping, posterior on depth 24 from cycle 500, per-cycle model surprise halved from 5.6 to 2.3 nats. 123 ms → 1.6 s per cycle as the trees deepen; 2.4 h wall total |
 
 The per-cycle posterior trajectory (also written by `--csv`) is the point of
 the exercise: Bayes arbitrates between compression learned online and
